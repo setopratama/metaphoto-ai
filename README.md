@@ -12,7 +12,7 @@ Aplikasi memproses setiap berkas gambar (`.jpg`, `.jpeg`, `.png`, dll) di dalam 
    * Metadata `Title` dan `Keywords` ditulis langsung ke dalam berkas gambar menggunakan `exiftool`.
 4. **Caching & Rekap**:
    * Menyimpan cache di `.metaphoto_cache.json` agar foto yang sudah terproses tidak dianalisis ulang jika script dijalankan kembali.
-   * Menulis rekapitulasi data seluruh foto yang sukses diproses ke dalam folder `LOG/` dengan format JSON berurut waktu.
+   * Menulis rekapitulasi data seluruh foto yang sukses diproses ke dalam folder `log/` dengan format JSON berurut waktu.
 
 ---
 
@@ -28,7 +28,7 @@ metaphoto/
 ├── AGENTS.md               # Dokumentasi petunjuk untuk AI Agent pengembang
 ├── .env                    # Kunci API OpenRouter (diabaikan oleh git)
 ├── .metaphoto_cache.json   # Berkas cache pemrosesan (diabaikan oleh git)
-├── LOG/                    # Folder log rekap metadata (diabaikan oleh git)
+├── log/                    # Folder log rekap metadata (diabaikan oleh git)
 └── photos/                 # Folder foto input (berkas di dalamnya akan diproses langsung)
 ```
 
@@ -62,4 +62,4 @@ make run
 Setelah selesai, program akan:
 1. Mengubah nama berkas asli di folder `photos/` menjadi nama ramah SEO (Contoh: `photos/beautiful-beach-sunset.jpg`).
 2. Menyisipkan tag metadata EXIF `Title` dan `Keywords` ke dalam foto.
-3. Membuat berkas rekap JSON berurutan waktu di dalam folder `LOG/` (contoh: `LOG/metadata_20260707_121526.json`).
+3. Membuat berkas rekap JSON berurutan waktu di dalam folder `log/` (contoh: `log/metadata_20260707_121526.json`).

@@ -21,7 +21,7 @@ main.py (Unified Metadata Engine)
                          4. Write EXIF tags (Title & Keywords) using exiftool
                          5. Save result to cache
       ↓
-LOG/metadata_YYYYMMDD_HHMMSS.json (Timestamped Summary)
+log/metadata_YYYYMMDD_HHMMSS.json (Timestamped Summary)
 ```
 
 ---

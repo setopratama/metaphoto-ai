@@ -40,7 +40,7 @@ TEXT_API_URL = os.environ.get("TEXT_API_BASE_URL", "https://openrouter.ai/api/v1
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "google/gemini-3-flash-preview")
 
 PHOTOS_DIR = "photos"
-LOG_DIR = "LOG"
+LOG_DIR = "log"
 CACHE_FILE = ".metaphoto_cache.json"
 
 MAX_KEYWORDS = 45
