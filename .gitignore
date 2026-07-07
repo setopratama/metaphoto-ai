@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 .metaphoto_cache.json
 log/
+photos/*
+!photos/.gitkeep
