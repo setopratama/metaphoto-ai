@@ -1,9 +1,53 @@
+"""
+main.py
+--------------------------------
+Generator 2-TAHAP & Writer Metadata untuk https://github.com/setopratama/metaphoto-ai
+
+TAHAP 1 (VISION MODEL - lokal, moondream via Ollama):
+    Model kecil & cepat (1.6B), diminta isi TEMPLATE terstruktur
+    (Subject/Action/Setting/Colors/Mood/Style).
+
+TAHAP 2 (TEXT MODEL - cloud, model lebih kuat, contoh: Gemini 3 Flash Preview):
+    Menerima catatan terstruktur dari Tahap 1, lalu menyusun Title SEO +
+    45 Keyword mengikuti strategi "keyword populer dulu, niche belakangan".
+
+TAHAP 3 (WRITER & RENAME):
+    Mengubah nama berkas gambar sesuai dengan judul yang disanitasi,
+    lalu menuliskan tag Title & Keywords langsung ke berkas menggunakan exiftool.
+    Hubungan antara gambar dan metadata dijamin 1:1 (tidak diacak).
+
+Setup:
+    pip install requests
+"""
+
 import os
 import sys
-import random
+import json
+import time
+import base64
+import mimetypes
+import requests
 import subprocess
 import re
-import glob
+
+# ---------- Konfigurasi ----------
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+
+VISION_API_URL = os.environ.get("VISION_API_BASE_URL", "http://localhost:11434/v1/chat/completions")
+VISION_MODEL = os.environ.get("VISION_MODEL", "moondream")
+
+TEXT_API_URL = os.environ.get("TEXT_API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
+TEXT_MODEL = os.environ.get("TEXT_MODEL", "google/gemini-3-flash-preview")
+
+PHOTOS_DIR = "photos"
+TITLE_FILE = "title.txt"
+KEYWORD_FILE = "keyword.txt"
+DESC_DEBUG_FILE = "deskripsi_mentah.txt"
+CACHE_FILE = ".metaphoto_cache.json"
+
+MAX_KEYWORDS = 45
+REQUEST_DELAY_SEC = 0.5
+MAX_RETRIES = 3
 
 ILLEGAL_CHARS = re.compile(r'[\x00-\x1f/\\:*?"<>|]')
 RESERVED_WIN = {
@@ -12,6 +56,63 @@ RESERVED_WIN = {
     "LPT1 LPT2 LPT3 LPT4 LPT5 LPT6 LPT7 LPT8 LPT9".split()
 }
 
+# ---------- Prompt Tahap 1: Vision -> deskripsi terstruktur ----------
+VISION_SYSTEM_PROMPT = """You describe images factually and literally. Answer ONLY in this exact template,
+one line per field, in English. Keep each answer short and concrete (max 1 short sentence per field).
+Do not add any other text, explanation, or formatting.
+
+Subject: <main subject(s) in the image, what/who they are>
+Action: <what is happening / what the subject is doing, or "static/still" if nothing>
+Setting: <location, background, environment>
+Colors: <2-4 dominant colors>
+Mood: <overall mood/feeling, e.g. calm, energetic, professional, cozy>
+Style: <photo, illustration, vector, 3d render, flat lay, etc — only if clearly identifiable>"""
+
+# ---------- Prompt Tahap 2: deskripsi -> title + keywords SEO ----------
+TEXT_SYSTEM_PROMPT = f"""Anda adalah asisten SEO metadata untuk foto/ilustrasi yang dijual di
+Adobe Stock dan Shutterstock. Anda akan menerima CATATAN TERSTRUKTUR tentang sebuah gambar
+(Subject/Action/Setting/Colors/Mood/Style, bukan gambarnya langsung, dan mungkin agak singkat
+karena berasal dari model vision kecil). Tugas Anda: rangkai jadi Title + Keywords yang matang,
+dengan menambahkan konteks/sinonim/istilah pencarian yang wajar berdasarkan catatan tersebut.
+
+STRATEGI KEYWORD "POPULER" (penting):
+- Urutkan keyword dari yang PALING SERING DICARI ke yang paling niche/spesifik.
+- 5-10 keyword pertama harus istilah BROAD & bervolume pencarian tinggi (kategori umum:
+  contoh "business", "nature", "technology", "family", "food" -- bukan istilah spesifik dulu).
+- Sisanya baru istilah lebih spesifik/deskriptif (kombinasi 2-3 kata, konsep abstrak, use-case).
+- Selipkan sinonim yang lazim dicari pembeli stock (contoh: "laptop" DAN "computer" keduanya
+  valid kalau relevan, karena pembeli mencari dengan kata berbeda-beda untuk hal yang sama).
+
+ATURAN TITLE:
+- Bahasa Inggris, natural, deskriptif, seperti kalimat singkat (bukan tumpukan keyword).
+- Sebutkan subjek utama, aksi/kondisi, dan konteks/setting secara jelas di awal kalimat.
+- Panjang ideal 60-100 karakter (jangan lebih dari 150 karakter).
+- JANGAN pakai huruf kapital semua (ALL CAPS).
+- JANGAN sertakan merek dagang, nama brand, logo, karakter berhak cipta, nama selebriti.
+- JANGAN sertakan info kamera/teknis.
+- JANGAN pakai karakter ilegal untuk nama file: < > : " / \\ | ? *
+
+ATURAN KEYWORDS:
+- Hasilkan tepat {MAX_KEYWORDS} kata kunci, diurutkan sesuai strategi "populer" di atas.
+- Campuran: subjek utama, aksi, emosi/mood, warna dominan, setting/lokasi, konsep abstrak
+  (contoh: "success", "teamwork", "sustainability"), gaya visual (photo/illustration/
+  3d render/vector), komposisi (copy space, close-up, top view, isolated on white),
+  dan use-case bisnis yang relevan jika sesuai (contoh: technology, healthcare, finance).
+- Kata kunci berupa kata tunggal atau frasa pendek (maksimal 2-3 kata), BUKAN kalimat.
+- Tidak boleh ada duplikat atau sinonim yang diulang-ulang berlebihan (keyword stuffing).
+- JANGAN sertakan nama brand, logo, nama orang/selebriti, atau karakter berhak cipta.
+- Semua keyword dalam Bahasa Inggris.
+
+FORMAT OUTPUT:
+Balas HANYA dengan JSON valid, tanpa markdown, tanpa penjelasan tambahan, persis format ini:
+{{"title": "...", "keywords": ["keyword1", "keyword2", "..."]}}
+"""
+
+def check_exiftool():
+    result = subprocess.run(['which', 'exiftool'], capture_output=True, text=True)
+    if result.returncode != 0:
+        print("[FAIL] exiftool tidak ditemukan di PATH")
+        sys.exit(1)
 
 def sanitize_filename(name):
     name = ILLEGAL_CHARS.sub('', name)
@@ -26,17 +127,6 @@ def sanitize_filename(name):
         base = base.rstrip('. ') + '_'
     return base
 
-
-def read_lines(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        return [line.rstrip('\n\r') for line in f]
-
-
-def read_keywords(path):
-    lines = read_lines(path)
-    return [[kw.strip() for kw in line.split(',') if kw.strip()] for line in lines]
-
-
 def write_metadata(filepath, title, keywords):
     cmd = ['exiftool', '-overwrite_original']
     cmd.extend([f'-Title={title}'])
@@ -47,117 +137,206 @@ def write_metadata(filepath, title, keywords):
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode == 0, result.stderr
 
+def encode_image_data_url(path):
+    mime = mimetypes.guess_type(path)[0] or "image/jpeg"
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:{mime};base64,{b64}"
 
-def check_exiftool():
-    result = subprocess.run(['which', 'exiftool'], capture_output=True, text=True)
-    if result.returncode != 0:
-        print("ERROR: exiftool tidak ditemukan di PATH")
-        sys.exit(1)
+def call_model(api_url, model, messages, api_key="", max_tokens=800, temperature=0.4):
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    resp = requests.post(api_url, headers=headers, json=payload, timeout=180)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
+def describe_image(path, attempt=1):
+    try:
+        data_url = encode_image_data_url(path)
+        messages = [
+            {"role": "system", "content": VISION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Fill in the template for this image."},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            },
+        ]
+        text = call_model(
+            VISION_API_URL, VISION_MODEL, messages,
+            api_key=OPENROUTER_API_KEY if "openrouter.ai" in VISION_API_URL else "",
+            max_tokens=300, temperature=0.3,
+        )
+        text = text.strip()
+        if not text:
+            raise ValueError("Deskripsi kosong")
+        return text
+    except Exception as e:
+        if attempt < MAX_RETRIES:
+            time.sleep(2 * attempt)
+            return describe_image(path, attempt + 1)
+        print(f"    [WARN] Tahap 1 (vision) gagal: {e}")
+        return ""
+
+def parse_json_reply(text):
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    text = text.strip()
+    data = json.loads(text)
+    title = str(data["title"]).strip()
+    keywords = [str(k).strip() for k in data.get("keywords", []) if str(k).strip()]
+    return title, keywords
+
+def generate_seo_metadata(description, attempt=1):
+    try:
+        messages = [
+            {"role": "system", "content": TEXT_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Deskripsi gambar:\n{description}"},
+        ]
+        raw = call_model(
+            TEXT_API_URL, TEXT_MODEL, messages,
+            api_key=OPENROUTER_API_KEY if "openrouter.ai" in TEXT_API_URL else "",
+            max_tokens=800, temperature=0.5,
+        )
+        title, keywords = parse_json_reply(raw)
+        if not title or not keywords:
+            raise ValueError("Title/keywords kosong")
+        return title, keywords[:MAX_KEYWORDS]
+    except Exception as e:
+        if attempt < MAX_RETRIES:
+            time.sleep(2 * attempt)
+            return generate_seo_metadata(description, attempt + 1)
+        print(f"    [WARN] Tahap 2 (text/SEO) gagal: {e}")
+        return "", []
+
+def scan_photos(folder):
+    exts = (".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG")
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(exts)]
+    return sorted(files)
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_cache(cache):
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
 
 def main():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+    folder = os.getcwd()
+    photos_dir = os.path.join(folder, PHOTOS_DIR)
+    if not os.path.exists(photos_dir):
+        print(f"[FAIL] Folder '{PHOTOS_DIR}/' tidak ditemukan di {folder}.")
+        sys.exit(1)
 
     check_exiftool()
 
-    title_file = 'title.txt'
-    keyword_file = 'keyword.txt'
-
-    if not os.path.exists(title_file):
-        print(f"ERROR: {title_file} tidak ditemukan")
-        sys.exit(1)
-    if not os.path.exists(keyword_file):
-        print(f"ERROR: {keyword_file} tidak ditemukan")
-        sys.exit(1)
-
-    titles = read_lines(title_file)
-    keywords = read_keywords(keyword_file)
-
-    titles = [t for t in titles if t]
-    keywords = [k for k in keywords if k]
-
-    if not titles:
-        print("ERROR: title.txt kosong")
-        sys.exit(1)
-    if not keywords:
-        print("ERROR: keyword.txt kosong")
-        sys.exit(1)
-
-    photos_dir = os.path.join(script_dir, 'photos')
-    if not os.path.isdir(photos_dir):
-        print(f"ERROR: Folder 'photos' tidak ditemukan di {script_dir}")
-        sys.exit(1)
-
-    files = [f for f in glob.glob(os.path.join(photos_dir, '*.jpg'))
-             + glob.glob(os.path.join(photos_dir, '*.jpeg'))
-             + glob.glob(os.path.join(photos_dir, '*.png'))
-             + glob.glob(os.path.join(photos_dir, '*.JPG'))
-             + glob.glob(os.path.join(photos_dir, '*.JPEG'))
-             + glob.glob(os.path.join(photos_dir, '*.PNG'))
-             ]
-
-    files = [os.path.basename(f) for f in files]
-
+    files = scan_photos(photos_dir)
     if not files:
-        print("ERROR: Tidak ada file .jpg/.png/.jpeg di folder photos/")
+        print(f"[FAIL] Tidak ada file JPG/JPEG/PNG di '{PHOTOS_DIR}/'.")
         sys.exit(1)
 
-    random.shuffle(files)
-    random.shuffle(titles)
-    random.shuffle(keywords)
+    is_text_local = "localhost" in TEXT_API_URL or "127.0.0.1" in TEXT_API_URL
+    if not OPENROUTER_API_KEY and not is_text_local and "openrouter.ai" in TEXT_API_URL:
+        print("[FAIL] TEXT_API_BASE_URL mengarah ke OpenRouter tapi OPENROUTER_API_KEY belum diset.")
+        sys.exit(1)
 
-    used_names = set()
-    success = 0
-    fail = 0
-    logs = []
+    print(f"Ditemukan {len(files)} foto.")
+    print(f"Tahap 1 (vision) : {VISION_MODEL} @ {VISION_API_URL}")
+    print(f"Tahap 2 (SEO)    : {TEXT_MODEL} @ {TEXT_API_URL}\n")
 
-    for i, filepath in enumerate(files):
-        title = titles[i % len(titles)]
-        kws = keywords[i % len(keywords)]
+    cache = load_cache()
+    used_names = {os.path.basename(f).lower() for f in files}
+    results = []
 
-        ext = os.path.splitext(filepath)[1].lower()
-        safe_base = sanitize_filename(title)
-        if safe_base is None:
-            logs.append(f"SKIP: {filepath} -> title kosong setelah sanitasi: '{title}'")
-            fail += 1
+    for i, path in enumerate(files, start=1):
+        rel = os.path.relpath(path, folder)
+        if rel in cache:
+            print(f"[{i}/{len(files)}] [CACHE] {rel}")
+            results.append(cache[rel])
             continue
 
-        new_name = safe_base + ext
-        dedup_count = 2
-        orig_base = safe_base
-        while new_name.lower() in used_names or os.path.exists(os.path.join(photos_dir, new_name)):
-            safe_base = f"{orig_base}_{dedup_count}"
-            new_name = safe_base + ext
-            dedup_count += 1
+        print(f"[{i}/{len(files)}] {rel}")
+        desc = describe_image(path)
+        print(f"    Deskripsi: {desc[:90]}{'...' if len(desc) > 90 else ''}")
 
-        old_path = os.path.join(photos_dir, filepath)
-        new_path = os.path.join(photos_dir, new_name)
+        title, keywords = ("", [])
+        if desc:
+            title, keywords = generate_seo_metadata(desc)
+            if title:
+                print(f"    Title    : {title}")
 
-        try:
-            os.rename(old_path, new_path)
-        except OSError as e:
-            logs.append(f"RENAME FAIL: {filepath} -> {new_name}: {e}")
-            fail += 1
-            continue
-
-        used_names.add(new_name.lower())
-
-        ok, err = write_metadata(new_path, title, kws)
-        if ok:
-            logs.append(f"OK: {filepath} -> {new_name} | Title: {title} | Keywords: {','.join(kws)}")
-            success += 1
+        entry = {"desc": desc, "title": title, "keywords": keywords}
+        
+        if title:
+            ext = os.path.splitext(path)[1].lower()
+            safe_base = sanitize_filename(title)
+            if safe_base:
+                new_name = safe_base + ext
+                dedup_count = 2
+                orig_base = safe_base
+                while new_name.lower() in used_names or os.path.exists(os.path.join(photos_dir, new_name)):
+                    safe_base = f"{orig_base}_{dedup_count}"
+                    new_name = safe_base + ext
+                    dedup_count += 1
+                
+                new_path = os.path.join(photos_dir, new_name)
+                try:
+                    os.rename(path, new_path)
+                    used_names.add(new_name.lower())
+                    new_rel = os.path.relpath(new_path, folder)
+                    
+                    ok, err = write_metadata(new_path, title, keywords)
+                    if ok:
+                        print(f"    [OK] Ganti nama & tulis metadata: {rel} -> {new_rel}")
+                        cache[new_rel] = entry
+                    else:
+                        print(f"    [WARN] Gagal menulis metadata exiftool: {err}")
+                        cache[new_rel] = entry
+                except OSError as e:
+                    print(f"    [WARN] Gagal mengganti nama berkas: {e}")
+                    cache[rel] = entry
+            else:
+                print(f"    [WARN] Judul hasil sanitasi kosong untuk: {title}")
+                cache[rel] = entry
         else:
-            logs.append(f"META FAIL: {new_name} (exiftool): {err}")
-            fail += 1
+            cache[rel] = entry
 
-    print("\n=== HASIL ===")
-    print(f"Sukses: {success}")
-    print(f"Gagal: {fail}")
-    print("\n--- Detail ---")
-    for line in logs:
-        print(line)
+        results.append(entry)
+        save_cache(cache)
+        time.sleep(REQUEST_DELAY_SEC)
+
+    # Simpan rekap file txt untuk keperluan backup/shutterstock csv
+    with open(os.path.join(folder, TITLE_FILE), "w", encoding="utf-8") as f:
+        for r in results:
+            f.write((r["title"] or "untitled-image") + "\n")
+
+    with open(os.path.join(folder, KEYWORD_FILE), "w", encoding="utf-8") as f:
+        for r in results:
+            f.write(", ".join(r["keywords"]) + "\n")
+
+    with open(os.path.join(folder, DESC_DEBUG_FILE), "w", encoding="utf-8") as f:
+        for r in results:
+            f.write((r["desc"] or "") + "\n")
+
+    failed = sum(1 for r in results if not r["title"])
+    print(f"\n[SUCCESS] Proses selesai. {TITLE_FILE}, {KEYWORD_FILE}, dan {DESC_DEBUG_FILE} dibuat untuk backup.")
+    if failed:
+        print(f"[WARN] {failed} foto gagal diproses penuh, cek '{DESC_DEBUG_FILE}' untuk debug.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
