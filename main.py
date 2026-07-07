@@ -344,12 +344,8 @@ def main():
                         cache[final_rel] = entry
                 except OSError as e:
                     print(f"    [WARN] Gagal mengganti nama berkas: {e}")
-                    cache[rel] = entry
             else:
                 print(f"    [WARN] Judul hasil sanitasi kosong untuk: {title}")
-                cache[rel] = entry
-        else:
-            cache[rel] = entry
 
         results.append({
             "original_file": rel,
