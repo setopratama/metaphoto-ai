@@ -18,7 +18,7 @@ main.py (Unified Metadata Engine)
                          1. Tahap 1 (Vision): local 'moondream:latest' via Ollama (ollama_server:11434)
                          2. Tahap 2 (Text/SEO): 'google/gemini-3-flash-preview' via OpenRouter
                          3. Rename photo to sanitized SEO title
-                         4. Write EXIF tags (Title & Keywords) using exiftool
+                         4. Write EXIF/IPTC/XMP tags (Title, Description & Keywords) using exiftool
                          5. Save result to cache
       ↓
 log/metadata_YYYYMMDD_HHMMSS.json (Timestamped Summary)

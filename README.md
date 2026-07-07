@@ -9,7 +9,7 @@ Aplikasi memproses setiap berkas gambar (`.jpg`, `.jpeg`, `.png`, dll) di dalam 
 2. **Optimasi SEO (Tahap 2 - Text)**: Menggunakan model **Gemini 3 Flash Preview** (via OpenRouter) untuk menyusun Judul SEO deskriptif dan menghasilkan tepat 45 Kata Kunci (Keywords) terurut berdasarkan popularitas pencarian.
 3. **Penyisipan Metadata & Rename**:
    * Nama berkas diganti dengan Judul SEO yang telah disanitasi dari karakter ilegal.
-   * Metadata `Title` dan `Keywords` ditulis langsung ke dalam berkas gambar menggunakan `exiftool`.
+   * Metadata `Title`, `Description/Caption`, dan `Keywords` ditulis langsung ke dalam berkas gambar ke seluruh tag standar (**EXIF, IPTC, dan XMP**) menggunakan `exiftool` agar kompatibel penuh dengan Shutterstock & Adobe Stock.
 4. **Caching & Rekap**:
    * Menyimpan cache di `.metaphoto_cache.json` agar foto yang sudah terproses tidak dianalisis ulang jika script dijalankan kembali.
    * Menulis rekapitulasi data seluruh foto yang sukses diproses ke dalam folder `log/` dengan format JSON berurut waktu.
@@ -61,5 +61,5 @@ make run
 
 Setelah selesai, program akan:
 1. Mengubah nama berkas asli di folder `photos/` menjadi nama ramah SEO (Contoh: `photos/beautiful-beach-sunset.jpg`).
-2. Menyisipkan tag metadata EXIF `Title` dan `Keywords` ke dalam foto.
+2. Menyisipkan tag metadata **EXIF, IPTC, dan XMP** (`Title`, `Description/Caption`, dan `Keywords`) ke dalam foto.
 3. Membuat berkas rekap JSON berurutan waktu di dalam folder `log/` (contoh: `log/metadata_20260707_121526.json`).
