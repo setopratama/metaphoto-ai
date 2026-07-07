@@ -21,7 +21,7 @@ main.py (Unified Metadata Engine)
                          4. Write EXIF tags (Title & Keywords) using exiftool
                          5. Save result to cache
       ↓
-metadata.json (Generated Summary)
+LOG/metadata_YYYYMMDD_HHMMSS.json (Timestamped Summary)
 ```
 
 ---
@@ -60,7 +60,7 @@ Here are potential improvements you can work on:
 
 1. **Export to CSV**:
    * Platforms like Shutterstock and Adobe Stock support bulk metadata upload via CSV.
-   * Add a function to generate a standard microstock CSV (`filename, title, description, keywords`) alongside `metadata.json` for easy uploading.
+   * Add a function to generate a standard microstock CSV (`filename, title, description, keywords`) alongside the generated JSON log file for easy uploading.
 2. **Support Local Text/SEO Models**:
    * Add support for utilizing local text models (like `qwen2.5:latest`) for Phase 2 instead of OpenRouter, allowing 100% offline usage.
 3. **Web User Interface (WebUI)**:
