@@ -5,7 +5,10 @@ services:
     volumes:
       - ./:/app
     environment:
-      - VISION_API_BASE_URL=http://ollama_server:11434/v1/chat/completions
+      - VISION_API_BASE_URL
+      - VISION_MODEL
+      - TEXT_API_BASE_URL
+      - TEXT_MODEL
       - OPENROUTER_API_KEY
     networks:
       - ollama_default
