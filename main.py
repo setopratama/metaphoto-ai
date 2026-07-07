@@ -40,9 +40,7 @@ TEXT_API_URL = os.environ.get("TEXT_API_BASE_URL", "https://openrouter.ai/api/v1
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "google/gemini-3-flash-preview")
 
 PHOTOS_DIR = "photos"
-TITLE_FILE = "title.txt"
-KEYWORD_FILE = "keyword.txt"
-DESC_DEBUG_FILE = "deskripsi_mentah.txt"
+METADATA_JSON_FILE = "metadata.json"
 CACHE_FILE = ".metaphoto_cache.json"
 
 MAX_KEYWORDS = 45
@@ -266,7 +264,14 @@ def main():
         rel = os.path.relpath(path, folder)
         if rel in cache:
             print(f"[{i}/{len(files)}] [CACHE] {rel}")
-            results.append(cache[rel])
+            entry = cache[rel]
+            results.append({
+                "original_file": rel,
+                "renamed_file": rel,
+                "title": entry.get("title", ""),
+                "keywords": entry.get("keywords", []),
+                "description": entry.get("desc", "")
+            })
             continue
 
         print(f"[{i}/{len(files)}] {rel}")
@@ -281,6 +286,7 @@ def main():
 
         entry = {"desc": desc, "title": title, "keywords": keywords}
         
+        final_rel = rel
         if title:
             ext = os.path.splitext(path)[1].lower()
             safe_base = sanitize_filename(title)
@@ -297,15 +303,15 @@ def main():
                 try:
                     os.rename(path, new_path)
                     used_names.add(new_name.lower())
-                    new_rel = os.path.relpath(new_path, folder)
+                    final_rel = os.path.relpath(new_path, folder)
                     
                     ok, err = write_metadata(new_path, title, keywords)
                     if ok:
-                        print(f"    [OK] Ganti nama & tulis metadata: {rel} -> {new_rel}")
-                        cache[new_rel] = entry
+                        print(f"    [OK] Ganti nama & tulis metadata: {rel} -> {final_rel}")
+                        cache[final_rel] = entry
                     else:
                         print(f"    [WARN] Gagal menulis metadata exiftool: {err}")
-                        cache[new_rel] = entry
+                        cache[final_rel] = entry
                 except OSError as e:
                     print(f"    [WARN] Gagal mengganti nama berkas: {e}")
                     cache[rel] = entry
@@ -315,27 +321,24 @@ def main():
         else:
             cache[rel] = entry
 
-        results.append(entry)
+        results.append({
+            "original_file": rel,
+            "renamed_file": final_rel,
+            "title": title,
+            "keywords": keywords,
+            "description": desc
+        })
         save_cache(cache)
         time.sleep(REQUEST_DELAY_SEC)
 
-    # Simpan rekap file txt untuk keperluan backup/shutterstock csv
-    with open(os.path.join(folder, TITLE_FILE), "w", encoding="utf-8") as f:
-        for r in results:
-            f.write((r["title"] or "untitled-image") + "\n")
-
-    with open(os.path.join(folder, KEYWORD_FILE), "w", encoding="utf-8") as f:
-        for r in results:
-            f.write(", ".join(r["keywords"]) + "\n")
-
-    with open(os.path.join(folder, DESC_DEBUG_FILE), "w", encoding="utf-8") as f:
-        for r in results:
-            f.write((r["desc"] or "") + "\n")
+    # Simpan rekap ke file JSON
+    with open(os.path.join(folder, METADATA_JSON_FILE), "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
 
     failed = sum(1 for r in results if not r["title"])
-    print(f"\n[SUCCESS] Proses selesai. {TITLE_FILE}, {KEYWORD_FILE}, dan {DESC_DEBUG_FILE} dibuat untuk backup.")
+    print(f"\n[SUCCESS] Proses selesai. Rekap tersimpan di '{METADATA_JSON_FILE}'.")
     if failed:
-        print(f"[WARN] {failed} foto gagal diproses penuh, cek '{DESC_DEBUG_FILE}' untuk debug.")
+        print(f"[WARN] {failed} foto gagal diproses penuh, silakan periksa file log/cache.")
 
 
 if __name__ == "__main__":
