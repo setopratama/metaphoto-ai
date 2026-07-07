@@ -40,7 +40,7 @@ TEXT_API_URL = os.environ.get("TEXT_API_BASE_URL", "https://openrouter.ai/api/v1
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "google/gemini-3-flash-preview")
 
 PHOTOS_DIR = "photos"
-METADATA_JSON_FILE = "metadata.json"
+LOG_DIR = "LOG"
 CACHE_FILE = ".metaphoto_cache.json"
 
 MAX_KEYWORDS = 45
@@ -331,12 +331,20 @@ def main():
         save_cache(cache)
         time.sleep(REQUEST_DELAY_SEC)
 
-    # Simpan rekap ke file JSON
-    with open(os.path.join(folder, METADATA_JSON_FILE), "w", encoding="utf-8") as f:
+    # Buat folder LOG jika belum ada
+    log_dir_path = os.path.join(folder, LOG_DIR)
+    os.makedirs(log_dir_path, exist_ok=True)
+
+    # Format file JSON dengan tanggal dan detik (misal: metadata_20260707_121526.json)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    metadata_filename = f"metadata_{timestamp}.json"
+    metadata_filepath = os.path.join(log_dir_path, metadata_filename)
+
+    with open(metadata_filepath, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     failed = sum(1 for r in results if not r["title"])
-    print(f"\n[SUCCESS] Proses selesai. Rekap tersimpan di '{METADATA_JSON_FILE}'.")
+    print(f"\n[SUCCESS] Proses selesai. Rekap tersimpan di '{LOG_DIR}/{metadata_filename}'.")
     if failed:
         print(f"[WARN] {failed} foto gagal diproses penuh, silakan periksa file log/cache.")
 

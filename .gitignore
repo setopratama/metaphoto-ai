@@ -4,4 +4,4 @@ __pycache__/
 .env
 .DS_Store
 .metaphoto_cache.json
-metadata.json
+LOG/
