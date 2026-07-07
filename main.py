@@ -211,7 +211,7 @@ def parse_json_reply(text):
     keywords = [str(k).strip() for k in data.get("keywords", []) if str(k).strip()]
     return title, keywords
 
-def parse_moondream_description(desc_text):
+def parse_vision_description(desc_text):
     parsed = {}
     keys = ["Subject", "Action", "Setting", "Colors", "Mood", "Style"]
     for k in keys:
@@ -304,8 +304,9 @@ def main():
                 "title": entry.get("title", ""),
                 "keywords": entry.get("keywords", []),
                 "description": desc,
-                "moondream_raw": desc,
-                "moondream_detail": parse_moondream_description(desc)
+                "vision_model": VISION_MODEL,
+                "vision_raw": desc,
+                "vision_detail": parse_vision_description(desc)
             })
             continue
 
@@ -358,8 +359,9 @@ def main():
             "title": title,
             "keywords": keywords,
             "description": desc,
-            "moondream_raw": desc,
-            "moondream_detail": parse_moondream_description(desc)
+            "vision_model": VISION_MODEL,
+            "vision_raw": desc,
+            "vision_detail": parse_vision_description(desc)
         })
         save_cache(cache)
         time.sleep(REQUEST_DELAY_SEC)
