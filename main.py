@@ -127,10 +127,20 @@ def sanitize_filename(name):
 
 def write_metadata(filepath, title, keywords):
     cmd = ['exiftool', '-overwrite_original']
+    # Write Title to EXIF, IPTC (ObjectName), and XMP
     cmd.extend([f'-Title={title}'])
+    cmd.extend([f'-ObjectName={title}'])
+    
+    # Write Description/Caption to EXIF, IPTC (Caption-Abstract), and XMP
     cmd.extend([f'-ImageDescription={title}'])
+    cmd.extend([f'-Caption-Abstract={title}'])
+    cmd.extend([f'-Description={title}'])
+    
+    # Write Keywords to IPTC (Keywords) and XMP (Subject)
     for kw in keywords:
         cmd.extend([f'-Keywords={kw}'])
+        cmd.extend([f'-Subject={kw}'])
+        
     cmd.append(filepath)
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode == 0, result.stderr
