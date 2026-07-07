@@ -196,6 +196,23 @@ def parse_json_reply(text):
     keywords = [str(k).strip() for k in data.get("keywords", []) if str(k).strip()]
     return title, keywords
 
+def parse_moondream_description(desc_text):
+    parsed = {}
+    keys = ["Subject", "Action", "Setting", "Colors", "Mood", "Style"]
+    for k in keys:
+        parsed[k.lower()] = ""
+    if not desc_text:
+        return parsed
+
+    for line in desc_text.strip().split("\n"):
+        for k in keys:
+            if line.lower().startswith(f"{k.lower()}:"):
+                val = line[len(k)+1:].strip()
+                parsed[k.lower()] = val
+                break
+    return parsed
+
+
 def generate_seo_metadata(description, attempt=1):
     try:
         messages = [
@@ -265,12 +282,15 @@ def main():
         if rel in cache:
             print(f"[{i}/{len(files)}] [CACHE] {rel}")
             entry = cache[rel]
+            desc = entry.get("desc", "")
             results.append({
                 "original_file": rel,
                 "renamed_file": rel,
                 "title": entry.get("title", ""),
                 "keywords": entry.get("keywords", []),
-                "description": entry.get("desc", "")
+                "description": desc,
+                "moondream_raw": desc,
+                "moondream_detail": parse_moondream_description(desc)
             })
             continue
 
@@ -326,7 +346,9 @@ def main():
             "renamed_file": final_rel,
             "title": title,
             "keywords": keywords,
-            "description": desc
+            "description": desc,
+            "moondream_raw": desc,
+            "moondream_detail": parse_moondream_description(desc)
         })
         save_cache(cache)
         time.sleep(REQUEST_DELAY_SEC)
