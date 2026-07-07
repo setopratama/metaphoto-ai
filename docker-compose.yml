@@ -4,4 +4,14 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
+    environment:
+      - VISION_API_BASE_URL=http://ollama_server:11434/v1/chat/completions
+      - OPENROUTER_API_KEY
+    networks:
+      - ollama_default
     entrypoint: ["python", "main.py"]
+
+networks:
+  ollama_default:
+    external: true
+
