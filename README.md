@@ -5,7 +5,7 @@ Tool untuk menganalisis foto menggunakan AI, mengganti nama berkas secara otomat
 ## Cara Kerja (1:1 Berurutan)
 
 Aplikasi memproses setiap berkas gambar (`.jpg`, `.jpeg`, `.png`, dll) di dalam folder `photos/` secara berurutan:
-1. **Analisis Gambar (Tahap 1 - Vision)**: Menggunakan model Vision lokal **Moondream** (via Ollama) untuk mendeskripsikan isi gambar secara terstruktur.
+1. **Analisis Gambar (Tahap 1 - Vision)**: Gambar diecilkan secara dinamis (maksimal 512px) untuk meminimalkan beban RAM/VRAM GPU, lalu dianalisis menggunakan model Vision lokal (default: `moondream` atau `qwen2.5vl:3b` via Ollama) untuk mendeskripsikan isi gambar secara terstruktur.
 2. **Optimasi SEO (Tahap 2 - Text)**: Menggunakan model **Gemini 3 Flash Preview** (via OpenRouter) untuk menyusun Judul SEO deskriptif dan menghasilkan tepat 45 Kata Kunci (Keywords) terurut berdasarkan popularitas pencarian.
 3. **Penyisipan Metadata & Rename**:
    * Nama berkas diganti dengan Judul SEO yang telah disanitasi dari karakter ilegal.
@@ -62,4 +62,4 @@ make run
 Setelah selesai, program akan:
 1. Mengubah nama berkas asli di folder `photos/` menjadi nama ramah SEO (Contoh: `photos/beautiful-beach-sunset.jpg`).
 2. Menyisipkan tag metadata **EXIF, IPTC, dan XMP** (`Title`, `Description/Caption`, dan `Keywords`) ke dalam foto.
-3. Membuat berkas rekap JSON berurutan waktu di dalam folder `log/` (contoh: `log/metadata_20260707_121526.json`).
+3. Membuat berkas rekap JSON berurutan waktu di dalam folder `log/` (contoh: `log/metadata_20260707_121526.json`) yang berisi detail file asal/tujuan, judul, kata kunci, deskripsi, serta data hasil model vision (`vision_model`, `vision_raw`, `vision_detail`).

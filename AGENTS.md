@@ -15,7 +15,7 @@ main.py (Unified Metadata Engine)
       ↓ (Check .metaphoto_cache.json)
       ├─ Cache Hit  → Load metadata directly from cache
       └─ Cache Miss → AI Pipeline:
-                         1. Tahap 1 (Vision): local 'moondream:latest' via Ollama (ollama_server:11434)
+                         1. Tahap 1 (Vision): local 'moondream' or 'qwen2.5vl' via Ollama (downscaled to 512px)
                          2. Tahap 2 (Text/SEO): 'google/gemini-3-flash-preview' via OpenRouter
                          3. Rename photo to sanitized SEO title
                          4. Write EXIF/IPTC/XMP tags (Title, Description & Keywords) using exiftool
