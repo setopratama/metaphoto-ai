@@ -29,6 +29,8 @@ import mimetypes
 import requests
 import subprocess
 import re
+import io
+from PIL import Image
 
 # ---------- Konfigurasi ----------
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -146,10 +148,13 @@ def write_metadata(filepath, title, keywords):
     return result.returncode == 0, result.stderr
 
 def encode_image_data_url(path):
-    mime = mimetypes.guess_type(path)[0] or "image/jpeg"
-    with open(path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:{mime};base64,{b64}"
+    # Open and resize image dynamically to max 512px to fit in GPU VRAM
+    with Image.open(path) as img:
+        img.thumbnail((512, 512))
+        buffer = io.BytesIO()
+        img.convert("RGB").save(buffer, format="JPEG", quality=85)
+        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return f"data:image/jpeg;base64,{b64}"
 
 def call_model(api_url, model, messages, api_key="", max_tokens=800, temperature=0.4):
     headers = {"Content-Type": "application/json"}
